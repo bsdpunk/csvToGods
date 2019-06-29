@@ -21,7 +21,7 @@
 
 one=1
 function csvcount () { head -n1 "$@" | grep -o , | tr -d "\n" | wc -c; }
-
+function rqc () { awk -F'"' -v OFS='' '{ for (i=2; i<=NF; i+=2) gsub(",", "", $i) } 1' $@ | sed 's/"//g' ;}
 function prepCsv() {
     file=$1
     csvcols=$( csvcount $file | tr -d ' \t')
@@ -31,18 +31,22 @@ function prepCsv() {
     rm -rf cols
 
     echo "{" > metaData.json
+    echo "{" > metaData.json
+    echo "type $file struct {" > struct.go
     echo "\"columns\": [" >> metaData.json
     for i in $(seq 1 $twoCsvcols)
     do
         rqc $1 | awk -F, -v colnumber=$i '{print $colnumber}'  | tail -n+2 > col$i
         prepMetaData $i 
         dataTypesCsv $i >> cols
-        prepJson $i > metaData$i.json
-        prepJson $i >> metaData.json
+        #prepJson $i > metaData$i.json
+        #prepJson $i >> metaData.json
+        prepGods $i >> struct.go
         echo "," >> metaData.json
     done
     sed -i '$s/,$//' metaData.json
     echo "]}" >> metaData.json
+    echo "}" >> struct.go
 
 }
 
@@ -57,8 +61,8 @@ function prepLengthData() {
 
 function prepJson() {
 
-    max=$(head -n1 collength$1 | gsed 's/^[ 0-9]\+ /"max": "/' | sed 's/$/",/')
-    min=$(tail -n1 collength$1 | gsed 's/^[ 0-9]\+ /"min": "/' | sed 's/$/",/')
+    max=$(head -n1 collength$1 | sed 's/^[ 0-9]\+ /"max": "/' | sed 's/$/",/')
+    min=$(tail -n1 collength$1 | sed 's/^[ 0-9]\+ /"min": "/' | sed 's/$/",/')
     cname=$(awk -F, -v name="$1" '{print $name}' header)
     dtype=$( grep "Col $i" cols | egrep -o "[A-Za-z]+$"  | tail -n1)
     totalCols=$(echo "\"total\": \"\"")
@@ -80,6 +84,16 @@ function prepJson() {
 
 }
 
+function prepGods() {
+
+    max=$(head -n1 collength$1 | sed 's/^[ 0-9]\+ /"max": "/' | sed 's/$/",/')
+    min=$(tail -n1 collength$1 | sed 's/^[ 0-9]\+ /"min": "/' | sed 's/$/",/')
+    cname=$(awk -F, -v name="$1" '{print $name}' header)
+    dtype=$( grep "Col $i" cols | egrep -o "[A-Za-z]+$"  | tail -n1)
+    totalCols=$(echo "\"total\": \"\"")
+    echo  "$cname $dtype \`json:\"$cname\"\`"
+
+}
 function dataTypesCsv() {
     i=$1
 
